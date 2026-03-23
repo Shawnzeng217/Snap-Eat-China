@@ -1,7 +1,6 @@
 
 import React, { useState, useEffect, useRef } from 'react';
 import { createPortal } from 'react-dom';
-import { GoogleGenAI } from "@google/genai";
 import { Language } from '../types';
 import { LANGUAGES, COMMON_ALLERGENS, CHEF_CARD_DATA } from '../constants';
 
@@ -143,21 +142,63 @@ export const Profile: React.FC<ProfileProps> = ({
         setIsTranslating(true);
 
         try {
-            const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
-            const response = await ai.models.generateContent({
-                model: 'gemini-2.5-flash',
-                contents: {
-                    parts: [
-                        { text: `Translate the following dietary restriction note into ${defaultLanguage} for a chef to read. Keep it clear, polite and concise. Return ONLY the translated text.\n\nText: "${dietaryNotes}"` }
-                    ]
-                }
+            const dashscopeApiKey = import.meta.env.VITE_DASHSCOPE_API_KEY || process.env.DASHSCOPE_API_KEY || "";
+            const response = await fetch('https://dashscope.aliyuncs.com/compatible-mode/v1/chat/completions', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'Authorization': `Bearer ${dashscopeApiKey}`,
+                },
+                body: JSON.stringify({
+                    model: 'qwen3-omni-flash',
+                    messages: [
+                        {
+                            role: 'user',
+                            content: `Translate the following dietary restriction note into ${defaultLanguage} for a chef to read. Keep it clear, polite and concise. Return ONLY the translated text, no explanation.\n\nText: "${dietaryNotes}"`
+                        }
+                    ],
+                    stream: true,
+                    modalities: ["text"],
+                    temperature: 0.3,
+                    max_tokens: 512
+                })
             });
 
-            // Handle response
-            if (response.text) {
-                setTranslatedNotes(response.text.trim());
+            if (!response.ok) {
+                throw new Error(`DashScope API error (${response.status})`);
+            }
+
+            // Parse SSE stream
+            const reader = response.body!.getReader();
+            const decoder = new TextDecoder('utf-8');
+            let accumulated = '';
+            let buffer = '';
+
+            while (true) {
+                const { done, value } = await reader.read();
+                if (done) break;
+                buffer += decoder.decode(value, { stream: true });
+
+                const lines = buffer.split('\n');
+                buffer = lines.pop() || '';
+
+                for (const line of lines) {
+                    const trimmed = line.trim();
+                    if (!trimmed || trimmed === 'data: [DONE]') continue;
+                    if (trimmed.startsWith('data: ')) {
+                        try {
+                            const chunk = JSON.parse(trimmed.slice(6));
+                            const delta = chunk.choices?.[0]?.delta?.content;
+                            if (delta) accumulated += delta;
+                        } catch { /* skip malformed chunks */ }
+                    }
+                }
+            }
+
+            if (accumulated.trim()) {
+                setTranslatedNotes(accumulated.trim());
             } else {
-                console.warn("Translation returned empty text", response);
+                console.warn("Translation returned empty text");
                 setTranslatedNotes(dietaryNotes);
             }
         } catch (error) {

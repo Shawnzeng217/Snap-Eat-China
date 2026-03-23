@@ -1,6 +1,5 @@
 
 import React, { useEffect, useState } from 'react';
-import { GoogleGenAI, Type } from "@google/genai";
 import Tesseract from 'tesseract.js';
 import { Dish, Language, ScanType } from '../types';
 
@@ -61,73 +60,114 @@ export const Scanning: React.FC<ScanningProps> = ({ uploadedImage, targetLanguag
         // 1. Prepare Image
         const base64Image = await urlToBase64(uploadedImage);
 
-        // 2. Initialize Gemini
-        const ai = new GoogleGenAI({ apiKey: import.meta.env.VITE_API_KEY || process.env.API_KEY || "" });
-        // Note: Using import.meta.env.VITE_API_KEY is preferred in Vite, fallbacks for older setup
+        // 2. Get DashScope API Key
+        const dashscopeApiKey = import.meta.env.VITE_DASHSCOPE_API_KEY || process.env.DASHSCOPE_API_KEY || "";
 
-        // 3. Define Schema (Updated for Root Object with isMenu)
-        const responseSchema = {
-          type: Type.OBJECT,
-          properties: {
-            isMenu: { type: Type.BOOLEAN, description: "True if the image is a menu (text list), False if it is a photo of real food." },
-            dishes: {
-              type: Type.ARRAY,
-              items: {
-                type: Type.OBJECT,
-                properties: {
-                  name: { type: Type.STRING, description: `Name of the dish translated to ${targetLanguage}` },
-                  originalName: { type: Type.STRING, description: "Original name of the dish in its native language" },
-                  englishName: { type: Type.STRING, description: "Name of the dish in English (for image search purposes)" },
-                  description: { type: Type.STRING, description: `Description of ingredients and taste profile in ${targetLanguage}` },
-                  tags: { type: Type.ARRAY, items: { type: Type.STRING }, description: `Top 3 dominant flavor profile words (e.g. Sweet, Salty, Umami) in ${targetLanguage}` },
-                  allergens: { type: Type.ARRAY, items: { type: Type.STRING }, description: `List 1 to 5 potential allergens (e.g. Peanuts, Gluten, Dairy, Shellfish) in ${targetLanguage}` },
-                  spiceLevel: { type: Type.STRING, enum: ["None", "Mild", "Medium", "Hot"], description: "None=Not Spicy, Mild=1 chili, Medium=2 chilies, Hot=3 chilies" },
-                  category: { type: Type.STRING, description: "Broad category like Soup, Main, Dessert" },
-                  boundingBox: { type: Type.ARRAY, items: { type: Type.NUMBER }, description: "Bounding box of the dish [ymin, xmin, ymax, xmax] in 0-1000 scale." }
-                },
-                required: ["name", "originalName", "englishName", "description", "tags", "allergens", "spiceLevel", "category", "boundingBox"]
-              }
-            }
-          },
-          required: ["isMenu", "dishes"]
-        };
-
-        // 5. Construct Prompt with Accuracy Optimization
+        // 3. Construct Prompt with Accuracy Optimization
         const accuracyPrompt = scanType === 'menu'
           ? "ACCURACY RULE: Since this is a menu (text), you CANNOT see the food. You MUST infer 'spiceLevel', 'allergens', and 'tags' solely based on your CULINARY KNOWLEDGE of the dish name. Do not guess visual features."
           : "ACCURACY RULE: Infer 'spiceLevel' and 'allergens' based on VISUAL INSPECTION of the food.";
 
+        const systemPrompt = `You are a professional food analysis AI. You analyze images of food dishes or menus and return structured JSON data. You MUST respond with valid JSON only, no other text. The JSON must have this exact structure:
+{
+  "isMenu": boolean (true if the image is a menu/text list, false if it is a photo of real food),
+  "dishes": [
+    {
+      "name": "Name of the dish translated to ${targetLanguage}",
+      "originalName": "Original name of the dish in its native language",
+      "englishName": "Name of the dish in English (for image search)",
+      "description": "Description of ingredients and taste profile in ${targetLanguage}",
+      "tags": ["Top 3 dominant flavor words in ${targetLanguage}", e.g. "Sweet", "Salty", "Umami"],
+      "allergens": ["1 to 5 potential allergens in ${targetLanguage}", e.g. "Peanuts", "Gluten"],
+      "spiceLevel": "None" | "Mild" | "Medium" | "Hot",
+      "category": "Broad category like Soup, Main, Dessert",
+      "boundingBox": [ymin, xmin, ymax, xmax] (0-1000 scale)
+    }
+  ]
+}`;
+
+        const userPrompt = `Analyze this image. Identify all distinct dishes. Translate details to ${targetLanguage}.
+
+IMPORTANT:
+- 'originalName': The exact text as it appears on the menu (e.g., "宫保鸡丁").
+- 'description': Description in ${targetLanguage}.
+- 'spiceLevel': One of 'None', 'Mild', 'Medium', 'Hot'.
+- 'category': e.g., 'Appetizer', 'Main', 'Dessert'.
+- 'tags': Array of flavor profile strings in ${targetLanguage}.
+- 'boundingBox': [0,0,0,0] as placeholder if location is unclear.
+
+${accuracyPrompt}
+
+Respond with ONLY the JSON object, no markdown fences, no extra text.`;
+
         // --- PARALLEL EXECUTION: AI + MANDATED OCR ---
 
-        // A. Start Gemini Analysis (Focus on DISH IDENTIFICATION)
-        const geminiPromise = ai.models.generateContent({
-          model: 'gemini-2.5-flash',
-          contents: {
-            parts: [
-              { inlineData: { mimeType: 'image/jpeg', data: base64Image } },
-              {
-                text: `Analyze this menu image. 
-                                 Identify all distinct dishes. 
-                                 Translate details to ${targetLanguage}.
-                                 
-                                 IMPORTANT: Return PURE JSON adhering to the schema.
-                                 - 'originalName': The exact text as it appears on the menu (e.g., "宫保鸡丁").
-                                 - 'description': Brief English description.
-                                 - 'price': Price if available.
-                                 - 'spiceLevel': 'None', 'Mild', 'Medium', 'Hot'.
-                                 - 'category': e.g., 'Appetizer', 'Main', 'Dessert'.
-                                 - 'tags': Array of strings like "Spicy", "Vegetarian".
-                                 - 'boundingBox': [0,0,0,0] (Placeholder, we will use OCR for location).
-                                 
-                                 ${accuracyPrompt}`
-              }
-            ]
-          },
-          config: {
-            responseMimeType: "application/json",
-            responseSchema: responseSchema
+        // A. Start Qwen3-Omni-Flash Analysis via DashScope (OpenAI-compatible API)
+        const qwenPromise = (async () => {
+          const response = await fetch('https://dashscope.aliyuncs.com/compatible-mode/v1/chat/completions', {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+              'Authorization': `Bearer ${dashscopeApiKey}`,
+            },
+            body: JSON.stringify({
+              model: 'qwen3-omni-flash',
+              messages: [
+                { role: 'system', content: systemPrompt },
+                {
+                  role: 'user',
+                  content: [
+                    {
+                      type: 'image_url',
+                      image_url: { url: `data:image/jpeg;base64,${base64Image}` }
+                    },
+                    { type: 'text', text: userPrompt }
+                  ]
+                }
+              ],
+              stream: true,
+              stream_options: { include_usage: true },
+              modalities: ["text"],
+              response_format: { type: 'json_object' },
+              temperature: 0.3,
+              max_tokens: 4096
+            })
+          });
+
+          if (!response.ok) {
+            const errorBody = await response.text();
+            throw new Error(`DashScope API error (${response.status}): ${errorBody}`);
           }
-        });
+
+          // Parse SSE stream
+          const reader = response.body!.getReader();
+          const decoder = new TextDecoder('utf-8');
+          let accumulated = '';
+          let buffer = '';
+
+          while (true) {
+            const { done, value } = await reader.read();
+            if (done) break;
+            buffer += decoder.decode(value, { stream: true });
+
+            const lines = buffer.split('\n');
+            buffer = lines.pop() || '';
+
+            for (const line of lines) {
+              const trimmed = line.trim();
+              if (!trimmed || trimmed === 'data: [DONE]') continue;
+              if (trimmed.startsWith('data: ')) {
+                try {
+                  const chunk = JSON.parse(trimmed.slice(6));
+                  const delta = chunk.choices?.[0]?.delta?.content;
+                  if (delta) accumulated += delta;
+                } catch { /* skip malformed chunks */ }
+              }
+            }
+          }
+
+          return accumulated;
+        })();
 
         // B. Start OCR (MANDATORY for Commercial-Grade Accuracy)
         const ocrPromise = Tesseract.recognize(
@@ -140,13 +180,15 @@ export const Scanning: React.FC<ScanningProps> = ({ uploadedImage, targetLanguag
         });
 
         // Wait for both results
-        const [geminiResponse, ocrResult] = await Promise.all([geminiPromise, ocrPromise]);
+        const [qwenText, ocrResult] = await Promise.all([qwenPromise, ocrPromise]);
 
-        // 6. Parse Gemini Result
-        let jsonText = geminiResponse.text || "{}";
+        // 4. Parse Qwen Result
+        let jsonText = qwenText || "{}";
         if (jsonText.startsWith('```')) {
           jsonText = jsonText.replace(/^```json\s?/, '').replace(/^```\s?/, '').replace(/```$/, '');
         }
+        // Also strip any leading/trailing whitespace or markdown
+        jsonText = jsonText.trim();
 
         const parsedData = JSON.parse(jsonText);
         let dishesList = parsedData.dishes || [];
@@ -261,8 +303,11 @@ export const Scanning: React.FC<ScanningProps> = ({ uploadedImage, targetLanguag
       } catch (error: any) {
         console.error("AI/OCR Error:", error);
         if (isMounted) {
-          if (error.message?.includes('429') || error.message?.includes('Quota') || error.status === 'RESOURCE_EXHAUSTED') {
-            setStatusText("Gemini API Quota Exceeded. Please try again later.");
+          if (error.message?.includes('429') || error.message?.includes('Quota') || error.message?.includes('rate')) {
+            setStatusText("API rate limit reached. Please try again later.");
+            setTimeout(onCancel, 5000);
+          } else if (error.message?.includes('401') || error.message?.includes('Unauthorized')) {
+            setStatusText("API Key invalid. Please check your configuration.");
             setTimeout(onCancel, 5000);
           } else {
             setStatusText("Error scanning. Try again.");

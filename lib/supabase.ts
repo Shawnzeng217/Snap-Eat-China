@@ -28,6 +28,8 @@ const createSafeClient = () => {
             getSession: () => Promise.resolve({ data: { session: null }, error: null }),
             onAuthStateChange: () => ({ data: { subscription: { unsubscribe: () => {} } } }),
             signOut: () => Promise.resolve({ error: null }),
+            signInWithPassword: () => Promise.resolve({ data: { user: null, session: null }, error: { message: 'Supabase is not configured. Please set VITE_SUPABASE_URL and VITE_SUPABASE_ANON_KEY.' } }),
+            signUp: () => Promise.resolve({ data: { user: null, session: null }, error: { message: 'Supabase is not configured. Please set VITE_SUPABASE_URL and VITE_SUPABASE_ANON_KEY.' } }),
         }
     } as any;
 };

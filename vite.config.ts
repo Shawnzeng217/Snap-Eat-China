@@ -10,7 +10,7 @@ export default defineConfig(({ mode }) => {
   return {
     plugins: [react()],
     define: {
-      'process.env.API_KEY': JSON.stringify(env.API_KEY)
+      'process.env.DASHSCOPE_API_KEY': JSON.stringify(env.DASHSCOPE_API_KEY)
     },
     server: {
       port: 3000,
@@ -29,9 +29,6 @@ export default defineConfig(({ mode }) => {
               // Code split heavy third-party libs
               if (id.includes('@supabase')) {
                 return 'supabase-vendor';
-              }
-              if (id.includes('@google') || id.includes('genai')) {
-                return 'google-genai-vendor';
               }
               // All other node_modules
               return 'vendor';
