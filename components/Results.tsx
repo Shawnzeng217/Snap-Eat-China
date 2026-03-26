@@ -1,6 +1,8 @@
 
 import React, { useState } from 'react';
-import { Dish } from '../types';
+import { Dish, Language } from '../types';
+import { UI_TRANSLATIONS } from '../translations';
+import { CHEF_CARD_DATA } from '../constants';
 
 interface ResultsProps {
     uploadedImage: string | null;
@@ -8,9 +10,12 @@ interface ResultsProps {
     savedIds: string[];
     onBack: () => void;
     onSave: (id: string) => void;
+    uiLanguage: Language;
 }
 
-export const Results: React.FC<ResultsProps> = ({ uploadedImage, results, savedIds, onBack, onSave }) => {
+export const Results: React.FC<ResultsProps> = ({ uploadedImage, results, savedIds, onBack, onSave, uiLanguage }) => {
+    const t = UI_TRANSLATIONS[uiLanguage].results;
+    const common = UI_TRANSLATIONS[uiLanguage].common;
     const isMenuScan = results.length > 0 && results[0].isMenu;
 
     // Rule: If we have multiple results, use List View. If single result, use Expanded Card (Feed/Detail) View.
@@ -62,11 +67,14 @@ export const Results: React.FC<ResultsProps> = ({ uploadedImage, results, savedI
         if (!allergens || allergens.length === 0) return null;
         return (
             <div className="flex items-center gap-1">
-                {allergens.slice(0, 3).map((a, i) => (
-                    <div key={i} className="size-4 rounded-full bg-red-100 dark:bg-red-900/40 text-red-600 dark:text-red-400 flex items-center justify-center text-[10px] font-bold" title={a}>
-                        {a.charAt(0)}
-                    </div>
-                ))}
+                {allergens.slice(0, 3).map((a, i) => {
+                    const translated = CHEF_CARD_DATA[uiLanguage].allergens[a] || a;
+                    return (
+                        <div key={i} className="size-4 rounded-full bg-red-100 dark:bg-red-900/40 text-red-600 dark:text-red-400 flex items-center justify-center text-[10px] font-bold" title={translated}>
+                            {translated.charAt(0)}
+                        </div>
+                    );
+                })}
                 {allergens.length > 3 && (
                     <span className="text-[10px] text-gray-400">+</span>
                 )}
@@ -246,11 +254,13 @@ export const Results: React.FC<ResultsProps> = ({ uploadedImage, results, savedI
                                 {dish.allergens && dish.allergens.length > 0 ? (
                                     dish.allergens.map((allergen, idx) => (
                                         <span key={idx} className="inline-flex items-center rounded-md bg-red-50 dark:bg-red-900/20 px-2 py-0.5 text-xs font-bold text-red-700 dark:text-red-300">
-                                            {allergen}
+                                            {CHEF_CARD_DATA[uiLanguage].allergens[allergen] || allergen}
                                         </span>
                                     ))
                                 ) : (
-                                    <span className="text-xs text-gray-400 italic py-0.5">No major allergens detected</span>
+                                    <span className="text-xs text-gray-400 py-0.5">
+                                        {t.no_allergens}
+                                    </span>
                                 )}
                             </div>
                         </div>
@@ -295,10 +305,10 @@ export const Results: React.FC<ResultsProps> = ({ uploadedImage, results, savedI
                     </button>
                     <div className="text-center">
                         <h2 className="text-[#181310] dark:text-white text-lg font-bold leading-tight tracking-[-0.015em]">
-                            {isMenuScan ? 'Menu Translation' : 'Dish Analysis'}
+                            {isMenuScan ? UI_TRANSLATIONS[uiLanguage].home.scan_menu : UI_TRANSLATIONS[uiLanguage].home.scan_dish}
                         </h2>
                         <p className="text-[10px] text-gray-500 font-bold uppercase tracking-wider">
-                            Found {results.length} Item{results.length !== 1 ? 's' : ''}
+                            {t.found_items.replace('{count}', results.length.toString())}
                         </p>
                     </div>
                     <div className="size-10"></div>
@@ -309,7 +319,7 @@ export const Results: React.FC<ResultsProps> = ({ uploadedImage, results, savedI
                     {results.length === 0 && (
                         <div className="flex flex-col items-center justify-center py-20 text-center opacity-60">
                             <span className="material-symbols-outlined text-6xl mb-4">no_food</span>
-                            <p>No dishes identified.</p>
+                            <p>{t.no_dishes}</p>
                         </div>
                     )}
 
@@ -337,14 +347,14 @@ export const Results: React.FC<ResultsProps> = ({ uploadedImage, results, savedI
                                             className={`px-3 py-1.5 rounded-full text-xs font-bold flex items-center gap-1 transition-all ${modalViewMode === 'food' ? 'bg-white text-black shadow-md' : 'text-white hover:bg-white/10'}`}
                                         >
                                             <span className="material-symbols-outlined text-[16px]">restaurant</span>
-                                            Food
+                                            {t.food_tab}
                                         </button>
                                         <button
                                             onClick={() => setModalViewMode('scan')}
                                             className={`px-3 py-1.5 rounded-full text-xs font-bold flex items-center gap-1 transition-all ${modalViewMode === 'scan' ? 'bg-white text-black shadow-md' : 'text-white hover:bg-white/10'}`}
                                         >
                                             <span className="material-symbols-outlined text-[16px]">menu_book</span>
-                                            Menu
+                                            {t.menu_tab}
                                         </button>
                                     </div>
                                 )}
@@ -431,7 +441,7 @@ export const Results: React.FC<ResultsProps> = ({ uploadedImage, results, savedI
 
                                 {/* Description */}
                                 <div className="prose dark:prose-invert">
-                                    <h4 className="text-xs font-bold text-gray-400 uppercase tracking-wider mb-2">Description</h4>
+                                    <h4 className="text-xs font-bold text-gray-400 uppercase tracking-wider mb-2">{t.ingredients}</h4>
                                     <p className="text-gray-600 dark:text-gray-300 leading-relaxed text-sm">
                                         {selectedItem.description}
                                     </p>
@@ -442,12 +452,12 @@ export const Results: React.FC<ResultsProps> = ({ uploadedImage, results, savedI
                                     <div className="mt-6 p-4 rounded-xl bg-red-50 dark:bg-red-900/10 border border-red-100 dark:border-red-900/30">
                                         <div className="flex items-center gap-2 mb-2 text-red-700 dark:text-red-400">
                                             <span className="material-symbols-outlined text-[18px]">warning</span>
-                                            <h4 className="text-xs font-bold uppercase tracking-wider">Contains Allergens</h4>
+                                            <h4 className="text-xs font-bold uppercase tracking-wider">{t.allergens}</h4>
                                         </div>
                                         <div className="flex flex-wrap gap-2">
                                             {selectedItem.allergens.map(a => (
                                                 <span key={a} className="text-xs font-bold text-red-600 dark:text-red-300 bg-white dark:bg-red-900/20 px-2 py-1 rounded-md shadow-sm">
-                                                    {a}
+                                                    {CHEF_CARD_DATA[uiLanguage].allergens[a] || a}
                                                 </span>
                                             ))}
                                         </div>

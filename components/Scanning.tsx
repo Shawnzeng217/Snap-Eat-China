@@ -2,6 +2,8 @@
 import React, { useEffect, useState } from 'react';
 import Tesseract from 'tesseract.js';
 import { Dish, Language, ScanType } from '../types';
+import { UI_TRANSLATIONS } from '../translations';
+import { NATIVE_LANGUAGE_NAMES } from '../constants';
 
 interface ScanningProps {
   uploadedImage: string | null;
@@ -9,13 +11,17 @@ interface ScanningProps {
   scanType: ScanType;
   onCancel: () => void;
   onComplete: (results: Dish[], isMenu: boolean) => void;
+  uiLanguage: Language;
 }
 
-export const Scanning: React.FC<ScanningProps> = ({ uploadedImage, targetLanguage, scanType, onCancel, onComplete }) => {
+export const Scanning: React.FC<ScanningProps> = ({ uploadedImage, targetLanguage, scanType, onCancel, onComplete, uiLanguage }) => {
   const [progress, setProgress] = useState(0);
+  
+  const t = UI_TRANSLATIONS[uiLanguage].scanning;
+
   // Initialize status text based on scan type
   const [statusText, setStatusText] = useState(
-    scanType === 'menu' ? "Scanning Menu..." : "Analyzing Dish..."
+    scanType === 'menu' ? t.scanning_menu : t.analyzing_dish
   );
 
   // Helper to convert blob URL to Base64
@@ -55,7 +61,7 @@ export const Scanning: React.FC<ScanningProps> = ({ uploadedImage, targetLanguag
         }, 100);
 
         setProgress(10);
-        setStatusText("Analyzing image & text...");
+        setStatusText(t.analyzing_image);
 
         // 1. Prepare Image
         const base64Image = await urlToBase64(uploadedImage);
@@ -111,7 +117,7 @@ Respond with ONLY the JSON object, no markdown fences, no extra text.`;
               'Authorization': `Bearer ${dashscopeApiKey}`,
             },
             body: JSON.stringify({
-              model: 'qwen3-omni-flash',
+              model: 'qwen3-omni-flash-2025-12-01',
               messages: [
                 { role: 'system', content: systemPrompt },
                 {
@@ -195,9 +201,11 @@ Respond with ONLY the JSON object, no markdown fences, no extra text.`;
         const isMenu = parsedData.isMenu || false;
 
         // --- COMMERCIAL-GRADE OCR MATCHING LOGIC ---
-        if (isMounted) setStatusText("Refining locations...");
+        if (isMounted) setStatusText(t.refining_locations);
 
-        if (ocrResult && ocrResult.data && ocrResult.data.lines) {
+        const ocrLines = (ocrResult?.data as any)?.lines || (ocrResult?.data as any)?.pages?.[0]?.lines || [];
+
+        if (ocrLines.length > 0) {
 
           const img = new Image();
           img.src = uploadedImage;
@@ -212,7 +220,7 @@ Respond with ONLY the JSON object, no markdown fences, no extra text.`;
             let bestMatch: any = null;
             let bestScore = 0;
 
-            ocrResult.data.lines.forEach((line: any) => {
+            ocrLines.forEach((line: any) => {
               const normLine = line.text.replace(/\s+/g, '').toLowerCase();
 
               // 1. Exact Substring Match (High Confidence)
@@ -304,13 +312,13 @@ Respond with ONLY the JSON object, no markdown fences, no extra text.`;
         console.error("AI/OCR Error:", error);
         if (isMounted) {
           if (error.message?.includes('429') || error.message?.includes('Quota') || error.message?.includes('rate')) {
-            setStatusText("API rate limit reached. Please try again later.");
+            setStatusText(t.rate_limit);
             setTimeout(onCancel, 5000);
           } else if (error.message?.includes('401') || error.message?.includes('Unauthorized')) {
-            setStatusText("API Key invalid. Please check your configuration.");
+            setStatusText(t.invalid_key);
             setTimeout(onCancel, 5000);
           } else {
-            setStatusText("Error scanning. Try again.");
+            setStatusText(t.error_scanning);
             setTimeout(onCancel, 3000);
           }
           setProgress(0);
@@ -354,8 +362,8 @@ Respond with ONLY the JSON object, no markdown fences, no extra text.`;
           </h2>
           <p className="text-[#181310]/60 dark:text-[#f8f6f5]/60 text-base font-normal leading-normal max-w-[280px]">
             {scanType === 'menu'
-              ? `Reading menu text and translating to ${targetLanguage}.`
-              : `Identifying flavors and allergens in ${targetLanguage}.`
+              ? t.menu_desc.replace('{lang}', NATIVE_LANGUAGE_NAMES[targetLanguage])
+              : t.dish_desc.replace('{lang}', NATIVE_LANGUAGE_NAMES[targetLanguage])
             }
           </p>
         </div>
@@ -363,7 +371,7 @@ Respond with ONLY the JSON object, no markdown fences, no extra text.`;
         {/* Progress */}
         <div className="w-full max-w-[300px] flex flex-col gap-3">
           <div className="flex justify-between items-center px-1">
-            <span className="text-xs font-bold text-primary tracking-wide uppercase">Processing</span>
+            <span className="text-xs font-bold text-primary tracking-wide uppercase">{t.processing}</span>
             <span className="text-xs font-bold text-[#181310]/40 dark:text-white/40">{Math.min(100, Math.round(progress))}%</span>
           </div>
           <div className="h-3 w-full bg-[#e7dfda] dark:bg-[#3a261c] rounded-full overflow-hidden">
@@ -382,7 +390,7 @@ Respond with ONLY the JSON object, no markdown fences, no extra text.`;
           className="flex min-w-[120px] max-w-[480px] cursor-pointer items-center justify-center overflow-hidden rounded-full h-12 px-6 bg-[#e7dfda] dark:bg-[#3a261c] hover:bg-[#dcd3ce] dark:hover:bg-[#4a3225] text-[#181310] dark:text-white text-sm font-bold leading-normal tracking-[0.015em] transition-colors gap-2"
         >
           <span className="material-symbols-outlined text-[20px]">close</span>
-          <span className="truncate">Cancel Scan</span>
+          <span className="truncate">{t.cancel_scan}</span>
         </button>
       </div>
 

@@ -1,7 +1,7 @@
 
 export type Screen = 'home' | 'scanning' | 'results' | 'history' | 'profile';
 
-export type Language = 'English' | 'Chinese (Simplified)' | 'Chinese (Traditional)' | 'Japanese' | 'Korean' | 'Spanish' | 'French' | 'Thai' | 'Vietnamese' | 'German' | 'Italian';
+export type Language = 'English' | 'Chinese (Simplified)' | 'Japanese' | 'Korean' | 'Spanish' | 'French' | 'Thai' | 'Vietnamese' | 'German' | 'Italian';
 
 export type ScanType = 'dish' | 'menu';
 

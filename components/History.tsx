@@ -1,6 +1,8 @@
 
 import React, { useState } from 'react';
-import { Dish, SavedItem } from '../types';
+import { Dish, Language, SavedItem } from '../types';
+import { UI_TRANSLATIONS } from '../translations';
+import { CHEF_CARD_DATA } from '../constants';
 
 interface HistoryProps {
     historyItems: Dish[];
@@ -9,16 +11,19 @@ interface HistoryProps {
     onTabChange: (tab: 'scans' | 'saved') => void;
     onBack: () => void;
     onToggleSave: (id: string) => void;
+    uiLanguage: Language;
 }
 
-export const History: React.FC<HistoryProps> = ({ historyItems, savedItems, activeTab, onTabChange, onBack, onToggleSave }) => {
+export const History: React.FC<HistoryProps> = ({ historyItems, savedItems, activeTab, onTabChange, onBack, onToggleSave, uiLanguage }) => {
+    const t = UI_TRANSLATIONS[uiLanguage].history;
+    const common = UI_TRANSLATIONS[uiLanguage].common;
     const [expandedDish, setExpandedDish] = useState<Dish | null>(null);
-    const displayItems = activeTab === 'scans' ? historyItems : savedItems;
+    const displayItems = (activeTab === 'scans' ? historyItems : savedItems).slice(0, 30);
 
     // Helper to render spice level (reused logic for consistency)
     const renderSpiceLevel = (level: string) => {
         if (level === 'None' || !level) {
-            return <span className="text-xs font-bold text-gray-400 bg-gray-100 dark:bg-white/10 px-2 py-1 rounded-full">Not Spicy</span>;
+            return <span className="text-xs font-bold text-gray-400 bg-gray-100 dark:bg-white/10 px-2 py-1 rounded-full">{common.not_spicy}</span>;
         }
 
         let count = 0;
@@ -42,7 +47,7 @@ export const History: React.FC<HistoryProps> = ({ historyItems, savedItems, acti
 
             <header className="relative z-10 flex flex-col w-full bg-white/80 dark:bg-surface-dark/90 backdrop-blur-md shadow-sm">
                 <div className="flex items-center justify-between px-6 py-4">
-                    <h1 className="text-xl font-bold text-gray-900 dark:text-white">Activity</h1>
+                    <h1 className="text-xl font-bold text-gray-900 dark:text-white">{t.title}</h1>
                     <div className="flex items-center justify-center size-8 rounded-full bg-gray-100 dark:bg-gray-800">
                         <span className="material-symbols-outlined text-gray-500 text-sm">history</span>
                     </div>
@@ -57,7 +62,7 @@ export const History: React.FC<HistoryProps> = ({ historyItems, savedItems, acti
                             : 'text-gray-500 dark:text-gray-400 hover:text-gray-900 dark:hover:text-gray-200'
                             }`}
                     >
-                        History Scan
+                        {t.tab_scans}
                         {activeTab === 'scans' && (
                             <div className="absolute bottom-0 left-0 right-0 h-0.5 bg-primary rounded-t-full"></div>
                         )}
@@ -69,7 +74,7 @@ export const History: React.FC<HistoryProps> = ({ historyItems, savedItems, acti
                             : 'text-gray-500 dark:text-gray-400 hover:text-gray-900 dark:hover:text-gray-200'
                             }`}
                     >
-                        Saved
+                        {t.tab_saved}
                         {activeTab === 'saved' && (
                             <div className="absolute bottom-0 left-0 right-0 h-0.5 bg-primary rounded-t-full"></div>
                         )}
@@ -84,7 +89,7 @@ export const History: React.FC<HistoryProps> = ({ historyItems, savedItems, acti
                             {activeTab === 'scans' ? 'history_toggle_off' : 'bookmark_border'}
                         </span>
                         <p className="text-gray-500">
-                            {activeTab === 'scans' ? 'No recent scans.' : 'No saved dishes yet.'}
+                            {activeTab === 'scans' ? t.no_scans : t.no_saved}
                         </p>
                     </div>
                 )}
@@ -217,11 +222,11 @@ export const History: React.FC<HistoryProps> = ({ historyItems, savedItems, acti
                                         {expandedDish.allergens && expandedDish.allergens.length > 0 ? (
                                             expandedDish.allergens.slice(0, 5).map((allergen, idx) => (
                                                 <span key={idx} className="inline-flex items-center rounded-md bg-red-50 dark:bg-red-900/20 px-2 py-0.5 text-xs font-bold text-red-700 dark:text-red-300">
-                                                    {allergen}
+                                                    {CHEF_CARD_DATA[uiLanguage].allergens[allergen] || allergen}
                                                 </span>
                                             ))
                                         ) : (
-                                            <span className="text-xs text-gray-400 italic py-0.5">No major allergens detected</span>
+                                            <span className="text-xs text-gray-400 py-0.5">{UI_TRANSLATIONS[uiLanguage].results.no_allergens}</span>
                                         )}
                                     </div>
                                 </div>

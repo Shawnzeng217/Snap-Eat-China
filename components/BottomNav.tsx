@@ -1,13 +1,17 @@
 
 import React from 'react';
-import { Screen } from '../types';
+import { Screen, Language } from '../types';
+import { UI_TRANSLATIONS } from '../translations';
 
 interface BottomNavProps {
   currentScreen: Screen;
   onNavigate: (screen: Screen) => void;
+  uiLanguage: Language;
 }
 
-export const BottomNav: React.FC<BottomNavProps> = ({ currentScreen, onNavigate }) => {
+export const BottomNav: React.FC<BottomNavProps> = ({ currentScreen, onNavigate, uiLanguage }) => {
+  const t = UI_TRANSLATIONS[uiLanguage].nav;
+
   const getIconClass = (screen: Screen) => {
     return currentScreen === screen
       ? "text-primary dark:text-white"
@@ -28,7 +32,7 @@ export const BottomNav: React.FC<BottomNavProps> = ({ currentScreen, onNavigate 
       >
         {currentScreen === 'home' && <div className="absolute top-0 h-0.5 w-8 rounded-full bg-primary"></div>}
         <span className={`material-symbols-outlined text-[26px] ${getIconClass('home')}`}>home</span>
-        <p className={`text-[10px] font-bold leading-normal tracking-[0.015em] ${getTextClass('home')}`}>Home</p>
+        <p className={`text-[10px] font-bold leading-normal tracking-[0.015em] ${getTextClass('home')}`}>{t.home}</p>
       </button>
 
       <button
@@ -37,7 +41,7 @@ export const BottomNav: React.FC<BottomNavProps> = ({ currentScreen, onNavigate 
       >
         {currentScreen === 'results' && <div className="absolute top-0 h-0.5 w-8 rounded-full bg-primary"></div>}
         <span className={`material-symbols-outlined text-[26px] ${getIconClass('results')}`}>restaurant_menu</span>
-        <p className={`text-[10px] font-bold leading-normal tracking-[0.015em] ${getTextClass('results')}`}>Results</p>
+        <p className={`text-[10px] font-bold leading-normal tracking-[0.015em] ${getTextClass('results')}`}>{t.results}</p>
       </button>
 
       <button
@@ -46,7 +50,7 @@ export const BottomNav: React.FC<BottomNavProps> = ({ currentScreen, onNavigate 
       >
         {currentScreen === 'history' && <div className="absolute top-0 h-0.5 w-8 rounded-full bg-primary"></div>}
         <span className={`material-symbols-outlined text-[26px] ${getIconClass('history')}`}>history</span>
-        <p className={`text-[10px] font-bold leading-normal tracking-[0.015em] ${getTextClass('history')}`}>History</p>
+        <p className={`text-[10px] font-bold leading-normal tracking-[0.015em] ${getTextClass('history')}`}>{t.history}</p>
       </button>
 
       <button
@@ -55,7 +59,7 @@ export const BottomNav: React.FC<BottomNavProps> = ({ currentScreen, onNavigate 
       >
         {currentScreen === 'profile' && <div className="absolute top-0 h-0.5 w-8 rounded-full bg-primary"></div>}
         <span className={`material-symbols-outlined text-[26px] ${getIconClass('profile')}`}>person</span>
-        <p className={`text-[10px] font-bold leading-normal tracking-[0.015em] ${getTextClass('profile')}`}>Profile</p>
+        <p className={`text-[10px] font-bold leading-normal tracking-[0.015em] ${getTextClass('profile')}`}>{t.profile}</p>
       </button>
     </nav>
   );

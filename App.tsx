@@ -1,5 +1,5 @@
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { Home } from './components/Home';
 import { Scanning } from './components/Scanning';
 import { Results } from './components/Results';
@@ -10,6 +10,7 @@ import { BottomNav } from './components/BottomNav';
 import { Screen, Language, Dish, SavedItem, ScanType } from './types';
 import { MOCK_SAVED } from './constants';
 import { supabase } from './lib/supabase';
+import { UI_TRANSLATIONS } from './translations';
 
 
 const App: React.FC = () => {
@@ -22,8 +23,14 @@ const App: React.FC = () => {
   const [scanType, setScanType] = useState<ScanType>('dish');
 
   // State for Features
-  const [defaultLanguage, setDefaultLanguage] = useState<Language>('English');
+  const [uiLanguage, setUiLanguage] = useState<Language>('English');
+  const uiLanguageRef = useRef<Language>(uiLanguage);
   const [targetLanguage, setTargetLanguage] = useState<Language>('English');
+
+  // Keep ref in sync
+  useEffect(() => {
+    uiLanguageRef.current = uiLanguage;
+  }, [uiLanguage]);
 
   const [currentResults, setCurrentResults] = useState<Dish[]>([]);
   const [history, setHistory] = useState<Dish[]>([]); // All scanned items
@@ -36,17 +43,21 @@ const App: React.FC = () => {
   const [historyTab, setHistoryTab] = useState<'scans' | 'saved'>('scans');
 
   useEffect(() => {
-    supabase.auth.getSession().then(({ data: { session } }) => {
+    supabase.auth.getSession().then(({ data: { session } }: any) => {
       setSession(session);
-      if (session) fetchData(session.user.id);
+      if (session) fetchData(session.user.id, session.user.email, false); // Initial load, use profile
       else setLoading(false);
     });
 
     const {
       data: { subscription },
-    } = supabase.auth.onAuthStateChange((_event, session) => {
+    } = supabase.auth.onAuthStateChange((event: string, session: any) => {
       setSession(session);
-      if (session) fetchData(session.user.id);
+      if (session) {
+        // Only prioritize current UI language if it was a fresh login/sign-up
+        const isFreshLogin = event === 'SIGNED_IN' || event === 'SIGNED_UP';
+        fetchData(session.user.id, session.user.email, isFreshLogin);
+      }
       else {
         setHistory([]);
         setSavedItems([]);
@@ -61,7 +72,7 @@ const App: React.FC = () => {
     return () => subscription.unsubscribe();
   }, []);
 
-  const fetchData = async (userId: string) => {
+  const fetchData = async (userId: string, userEmail: string = '', isLoginEvent: boolean = false) => {
     setLoading(true);
     try {
       // Fetch Profile
@@ -69,16 +80,27 @@ const App: React.FC = () => {
         .from('profiles')
         .select('*')
         .eq('id', userId)
-        .single();
+        .maybeSingle();
 
       if (profile) {
-        setUserProfile(profile);
-        if (profile.default_language) {
-          setDefaultLanguage(profile.default_language as Language);
-          setTargetLanguage(profile.default_language as Language);
+        // By user request: allergens should not be checked by default for the test user
+        if (userEmail === 'test@hilton.com') {
+          profile.allergens = [];
         }
-        // Sync chef card language implicitly via userProfile prop, but we could also lift state if needed.
-        // For now, Profile component reads from userProfile prop.
+        setUserProfile(profile);
+        
+        const profileLang = profile.default_language as Language;
+        
+        const currentUiLang = uiLanguageRef.current;
+        if (isLoginEvent && currentUiLang !== profileLang) {
+          // User changed language on login screen, update profile to match
+          await supabase.from('profiles').update({ default_language: currentUiLang }).eq('id', userId);
+          setUserProfile((prev: any) => ({ ...prev, default_language: currentUiLang }));
+        } else if (profileLang) {
+          // Initial load or no change, use profile language
+          setUiLanguage(profileLang);
+          setTargetLanguage(profileLang);
+        }
       }
 
       // Fetch Scans
@@ -129,8 +151,8 @@ const App: React.FC = () => {
     }
   };
 
-  const handleDefaultLanguageChange = async (lang: Language) => {
-    setDefaultLanguage(lang);
+  const handleLanguageChange = async (lang: Language) => {
+    setUiLanguage(lang);
     setTargetLanguage(lang);
     if (session?.user) {
       await supabase.from('profiles').update({ default_language: lang }).eq('id', session.user.id);
@@ -247,8 +269,8 @@ const App: React.FC = () => {
 
   // Pass profile data to child
   const profileProps = {
-    defaultLanguage,
-    onDefaultLanguageChange: handleDefaultLanguageChange,
+    uiLanguage,
+    onLanguageChange: handleLanguageChange,
     onNavigateHistory: (tab: 'scans' | 'saved') => {
       setHistoryTab(tab);
       setCurrentScreen('history');
@@ -268,6 +290,7 @@ const App: React.FC = () => {
             onImageSelect={handleImageSelect}
             targetLanguage={targetLanguage}
             setTargetLanguage={setTargetLanguage}
+            uiLanguage={uiLanguage}
           />
         );
       case 'scanning':
@@ -278,6 +301,7 @@ const App: React.FC = () => {
             targetLanguage={targetLanguage}
             onCancel={handleScanCancel}
             onComplete={handleScanComplete}
+            uiLanguage={uiLanguage}
           />
         );
       case 'results':
@@ -288,6 +312,7 @@ const App: React.FC = () => {
             savedIds={savedItems.map(s => s.id)}
             onBack={() => setCurrentScreen('home')}
             onSave={handleToggleSave}
+            uiLanguage={uiLanguage}
           />
         );
       case 'history':
@@ -299,17 +324,31 @@ const App: React.FC = () => {
             onTabChange={setHistoryTab}
             onBack={() => setCurrentScreen('home')}
             onToggleSave={handleToggleSave}
+            uiLanguage={uiLanguage}
           />
         );
       case 'profile':
         return (
-          <Profile {...profileProps} />
+          <Profile
+            uiLanguage={uiLanguage}
+            onLanguageChange={handleLanguageChange}
+            onNavigateHistory={(tab) => {
+              setHistoryTab(tab);
+              setCurrentScreen('history');
+            }}
+            scanCount={history.length}
+            savedCount={savedItems.length}
+            onLogout={handleLogout}
+            userProfile={userProfile}
+            onUpdateProfile={updateProfile}
+          />
         );
       default:
         return <Home
           onImageSelect={handleImageSelect}
           targetLanguage={targetLanguage}
           setTargetLanguage={setTargetLanguage}
+          uiLanguage={uiLanguage}
         />;
     }
   };
@@ -323,7 +362,7 @@ const App: React.FC = () => {
   }
 
   if (!session) {
-    return <Auth />;
+    return <Auth uiLanguage={uiLanguage} onLanguageChange={handleLanguageChange} />;
   }
 
   return (
@@ -339,6 +378,7 @@ const App: React.FC = () => {
         <BottomNav
           currentScreen={currentScreen}
           onNavigate={setCurrentScreen}
+          uiLanguage={uiLanguage}
         />
       )}
     </div>
