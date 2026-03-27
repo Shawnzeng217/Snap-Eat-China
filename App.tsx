@@ -11,6 +11,7 @@ import { Screen, Language, Dish, SavedItem, ScanType } from './types';
 import { MOCK_SAVED } from './constants';
 import { supabase } from './lib/supabase';
 import { UI_TRANSLATIONS } from './translations';
+import { trackPageView } from './lib/adobeTracking';
 
 
 const App: React.FC = () => {
@@ -41,6 +42,11 @@ const App: React.FC = () => {
 
   // State for History Tabs
   const [historyTab, setHistoryTab] = useState<'scans' | 'saved'>('scans');
+
+  useEffect(() => {
+    // 仅在应用初次打开时触发一次浏览量 tracking
+    trackPageView('Snap-Eat', 'zh-CN');
+  }, []);
 
   useEffect(() => {
     supabase.auth.getSession().then(({ data: { session } }: any) => {
