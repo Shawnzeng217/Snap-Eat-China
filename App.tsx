@@ -44,16 +44,11 @@ const App: React.FC = () => {
   const [historyTab, setHistoryTab] = useState<'scans' | 'saved'>('scans');
 
   useEffect(() => {
-    const pageName = currentScreen === 'home' ? '首页' : 
-                     currentScreen === 'scanning' ? '扫描页' : 
-                     currentScreen === 'results' ? '结果页' : 
-                     currentScreen === 'history' ? '历史记录' : 
-                     currentScreen === 'profile' ? '个人主页' : currentScreen;
     const langCode = uiLanguage === 'Chinese (Simplified)' ? 'zh-CN' : 
                      uiLanguage === 'English' ? 'en-US' : 'zh-CN';
     
-    // Default to track login/auth if no user
-    trackPageView(session ? pageName : '登录注册页', langCode);
+    // Hilton CJA uses a unified pageName/pageType for SPAs, match AI Translator
+    trackPageView('Snap-Eat', langCode);
   }, [currentScreen, session, uiLanguage]);
 
   useEffect(() => {
